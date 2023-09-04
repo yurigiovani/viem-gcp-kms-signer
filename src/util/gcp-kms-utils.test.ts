@@ -1,4 +1,5 @@
 import BN from "bn.js";
+import { hexToBigInt } from "viem";
 import { getEthereumAddress, determineCorrectV, findEthereumSig } from "./gcp-kms-utils";
 
 describe("getEthereumAddress", () => {
@@ -31,32 +32,45 @@ describe("findEthereumSig", () => {
 });
 
 describe("determineCorrectV", () => {
-  test("should get correct V if it is 28", () => {
+  test("should get correct V if it is 28", async () => {
     const sampleMsg = Buffer.from("a1de988600a42c4b4ab089b619297c17d53cffae5d5120d82d8a92d0bb3b78f2", "hex");
     const sampleR = new BN("fa754063b93a288b9a96883fc365efb9aee7ecaf632009baa04fe429e706d50e", 16);
     const sampleS = new BN("6a8971b06cd37b3da4ad04bb1298fda152a41e5c1104fd5d974d5c0a060a5e62", 16);
     const expectedAddr = "0xe94e130546485b928c9c9b9a5e69eb787172952e";
-    expect(determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr)).toMatchObject({
-      pubKey: "0xE94E130546485b928C9C9b9A5e69EB787172952e",
-      v: 28,
+
+    const res = await determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr);
+    expect(res).toMatchObject({
+      pubKey: "0xe94e130546485b928c9c9b9a5e69eb787172952e",
+      // @ts-ignore
+      v: 28n,
     });
   });
-  test("should get correct V if it is 27", () => {
+  test("should get correct V if it is 27", async () => {
     const sampleMsg = Buffer.from("a1de988600a42c4b4ab089b619297c17d53cffae5d5120d82d8a92d0bb3b78f2", "hex");
     const sampleR = new BN("904d320777ceae0232282cbf6da3809a678541cdef7f4f3328242641ceecb0dc", 16);
     const sampleS = new BN("5b7f7afe18221049a1e176a89a60b6c10df8c0e838edb9b2f11ae1fb50a28271", 16);
     const expectedAddr = "0xe94e130546485b928c9c9b9a5e69eb787172952e";
-    expect(determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr)).toMatchObject({
-      pubKey: "0xE94E130546485b928C9C9b9A5e69EB787172952e",
-      v: 27,
+    const res = await determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr)
+    expect(res).toMatchObject({
+      pubKey: "0xe94e130546485b928c9c9b9a5e69eb787172952e",
+      // @ts-ignore
+      v: 27n,
     });
   });
 
-  test("should fail if somethings are invalid", () => {
+  test("should fail if somethings are invalid", async () => {
     const sampleMsg = Buffer.from("8600a42c4b4ab089b619297c17d53cffae5d5120d82d8a92d0bb3b78f2", "hex");
     const sampleR = new BN("777ceae0232282cbf6da3809a678541cdef7f4f3328242641ceecb0dc", 16);
     const sampleS = new BN("5b7f7afe18221049a1e176a89a60b6c10df8c0e838edb9b2f11ae1fb50a28271", 16);
     const expectedAddr = "0xe94e130546485b928c9c9b9a5e69eb787172952e";
-    expect(() => determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr)).toThrowError();
+    let err = null;
+
+    try {
+      await determineCorrectV(sampleMsg, sampleR, sampleS, expectedAddr);
+    } catch (e) {
+      err = e;
+    }
+
+    expect(err).not.toBeNull();
   });
 });

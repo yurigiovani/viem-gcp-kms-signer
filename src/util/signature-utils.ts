@@ -7,6 +7,8 @@ import {
   TypedDataUtils,
 } from "@metamask/eth-sig-util";
 import { bufferToHex, publicToAddress, fromRpcSig, ecrecover } from "ethereumjs-util";
+import { toHex, concat, toBytes, ByteArray, Hex, hexToBigInt, isHex } from "viem";
+import { Signature } from "viem/src/types/misc";
 
 /**
  * Recover the public key from the given signature and message hash.
@@ -78,4 +80,31 @@ export function recoverTypedSignature<V extends SignTypedDataVersion, T extends 
   const publicKey = recoverPublicKey(messageHash, signature);
   const sender = publicToAddress(publicKey);
   return bufferToHex(sender);
+}
+
+export function splitSignature(signature: ByteArray | Hex): Signature {
+  let res = signature;
+
+  if (isHex(signature)) {
+    res = toBytes(signature);
+  }
+
+  const r = res.slice(0, 32);
+  const s = res.slice(32, 64);
+  const v = res[64];
+
+  return {
+    r: toHex(r),
+    s: toHex(s),
+    v: hexToBigInt(toHex(v)),
+  };
+}
+
+export function joinSignature({r, s, v}: Signature) {
+  const parsed = splitSignature(toHex(concat([toBytes(r), toBytes(s), toBytes(v)])));
+  return toHex(toBytes(concat([
+    parsed.r,
+    parsed.s,
+    toHex(parsed.v),
+  ])));
 }

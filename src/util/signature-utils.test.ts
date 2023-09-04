@@ -1,5 +1,7 @@
 import { SignTypedDataVersion } from "@metamask/eth-sig-util";
-import { validateVersion } from "./signature-utils";
+import {joinSignature, splitSignature, validateVersion} from "./signature-utils";
+import {SignableMessage} from "viem";
+import {signMessage} from "viem/accounts";
 
 describe("Signature Utils", () => {
   test("should validate the v1 correctly", () => {
@@ -28,5 +30,22 @@ describe("Signature Utils", () => {
     expect(() => validateVersion(SignTypedDataVersion.V4, [SignTypedDataVersion.V1, SignTypedDataVersion.V3])).toThrow(
       "SignTypedDataVersion not allowed: 'V4'. Allowed versions are: V1, V3"
     );
+  });
+
+  test("should join the signature correctly", async () => {
+    // Replace this with your actual private key
+    const privateKey = "0x57d42336a4959b7f56cbde74ae2d50003d89e427b184c86ceac7d99a924ef706";
+    // Message to be signed
+    const message = 'Hello, Ethereum!' as SignableMessage;
+    // Sign the message
+    const signature = await signMessage({
+      message: message,
+      privateKey: privateKey,
+    })
+
+    const parsedSignature = splitSignature(signature);
+    const joinedSignature = joinSignature(parsedSignature)
+
+    expect(joinedSignature).toBe(signature);
   });
 });

@@ -1,9 +1,11 @@
-import { ethers } from "ethers";
+import { hexToBigInt, keccak256, signatureToHex, toBytes, toHex } from "viem";
 import { KeyManagementServiceClient } from "@google-cloud/kms";
 import * as asn1 from "asn1.js";
 import BN from "bn.js";
 import KeyEncoder from "key-encoder";
+import { Signature } from "viem/src/types/misc";
 import { GcpKmsSignerCredentials } from "../signer";
+import { recoverAddress } from "./recover-address";
 
 const keyEncoder = new KeyEncoder("secp256k1");
 
@@ -34,6 +36,7 @@ function getClientCredentials() {
 
 export async function sign(digest: Buffer, kmsCredentials: GcpKmsSignerCredentials) {
   const kms = new KeyManagementServiceClient(getClientCredentials());
+
   const versionName = kms.cryptoKeyVersionPath(
     kmsCredentials.projectId,
     kmsCredentials.locationId,
@@ -41,6 +44,7 @@ export async function sign(digest: Buffer, kmsCredentials: GcpKmsSignerCredentia
     kmsCredentials.keyId,
     kmsCredentials.keyVersion
   );
+
   const [asymmetricSignResponse] = await kms.asymmetricSign({
     name: versionName,
     digest: {
@@ -84,7 +88,7 @@ export function getEthereumAddress(publicKey: Buffer): string {
   const pubFormatted = pubKeyBuffer.slice(1, pubKeyBuffer.length);
 
   // keccak256 hash of publicKey
-  const address = ethers.utils.keccak256(pubFormatted);
+  const address = keccak256(pubFormatted);
   // take last 20 bytes as ethereum address
   const EthAddr = `0x${address.slice(-40)}`;
   return EthAddr;
@@ -111,26 +115,28 @@ export async function requestKmsSignature(plaintext: Buffer, kmsCredentials: Gcp
   return findEthereumSig(response.signature as Buffer);
 }
 
-function recoverPubKeyFromSig(msg: Buffer, r: BN, s: BN, v: number) {
-  return ethers.utils.recoverAddress(`0x${msg.toString("hex")}`, {
+async function recoverPubKeyFromSig(msg: Buffer, r: BN, s: BN, v: bigint) {
+  const signature = {
     r: `0x${r.toString("hex")}`,
     s: `0x${s.toString("hex")}`,
     v,
-  });
+  } as Signature;
+
+  return recoverAddress(msg, signatureToHex(signature));
 }
 
-export function determineCorrectV(msg: Buffer, r: BN, s: BN, expectedEthAddr: string) {
+export async function determineCorrectV(msg: Buffer, r: BN, s: BN, expectedEthAddr: string) {
   // This is the wrapper function to find the right v value
   // There are two matching signatures on the elliptic curve
   // we need to find the one that matches to our public key
   // it can be v = 27 or v = 28
-  let v = 27;
-  let pubKey = recoverPubKeyFromSig(msg, r, s, v);
+  let v = hexToBigInt(toHex(27));
+  let pubKey = await recoverPubKeyFromSig(msg, r, s, v);
   if (pubKey.toLowerCase() !== expectedEthAddr.toLowerCase()) {
     // if the pub key for v = 27 does not match
     // it has to be v = 28
-    v = 28;
-    pubKey = recoverPubKeyFromSig(msg, r, s, v);
+    v = hexToBigInt(toHex(28));
+    pubKey = await recoverPubKeyFromSig(msg, r, s, v);
   }
   return { pubKey, v };
 }

@@ -1,5 +1,6 @@
 import configs from "dotenv";
-import { ethers } from "ethers";
+import { polygonMumbai } from "viem/chains";
+import { createPublicClient, parseEther, webSocket } from "viem";
 import { GcpKmsSigner, TypedDataVersion } from "./signer";
 import { recoverTypedSignature } from "./util/signature-utils";
 
@@ -24,13 +25,16 @@ const kmsCredentials = {
 
 describe.skip("sign with Google KMS", () => {
   test("should send a signed transaction using KMS signer", async () => {
-    const provider = ethers.providers.InfuraProvider.getWebSocketProvider("goerli", process.env.INFURA_KEY);
+    const websocketURL = `wss://eth-mainnet.g.alchemy.com/v2/${process.env.INFURA_KEY}`
+    const client = createPublicClient({
+      chain: polygonMumbai,
+      transport: webSocket(websocketURL),
+    });
 
-    const signer = new GcpKmsSigner(kmsCredentials).connect(provider);
-
-    const tx = await signer.sendTransaction({
+    const signer = new GcpKmsSigner(kmsCredentials).connect(client);
+    const tx = await signer.provider.sendTransaction({
       to: "0xEd7B3f2902f2E1B17B027bD0c125B674d293bDA0",
-      value: ethers.utils.parseEther("0.001"),
+      value: parseEther('0.001'),
     });
 
     expect(tx).not.toBeNull();

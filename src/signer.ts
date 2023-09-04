@@ -8,10 +8,18 @@ import {
   TypedDataUtils,
 } from "@metamask/eth-sig-util";
 
-import { ethers, UnsignedTransaction } from "ethers";
+import {
+  toBytes,
+  hashMessage,
+  ByteArray,
+  toHex,
+  WalletClient,
+  serializeTransaction,
+  PrepareTransactionRequestReturnType, keccak256, Hex, hexToBigInt,
+} from "viem"
 import { bufferToHex } from "ethereumjs-util";
 import { getPublicKey, getEthereumAddress, requestKmsSignature, determineCorrectV } from "./util/gcp-kms-utils";
-import { validateVersion } from "./util/signature-utils";
+import { joinSignature, splitSignature, validateVersion } from "./util/signature-utils";
 
 configs.config();
 
@@ -25,15 +33,15 @@ export interface GcpKmsSignerCredentials {
   keyVersion: string;
 }
 
-export class GcpKmsSigner extends ethers.Signer {
-  kmsCredentials: GcpKmsSignerCredentials;
+export class GcpKmsSigner {
+  readonly kmsCredentials: GcpKmsSignerCredentials;
+  readonly provider: WalletClient;
 
   ethereumAddress: string;
 
-  constructor(kmsCredentials: GcpKmsSignerCredentials, provider?: ethers.providers.Provider) {
-    super();
-    ethers.utils.defineReadOnly(this, "provider", provider || null);
-    ethers.utils.defineReadOnly(this, "kmsCredentials", kmsCredentials);
+  constructor(kmsCredentials: GcpKmsSignerCredentials, provider?: WalletClient | null) {
+    this.kmsCredentials = kmsCredentials;
+    this.provider = provider;
   }
 
   async getAddress(): Promise<string> {
@@ -44,20 +52,24 @@ export class GcpKmsSigner extends ethers.Signer {
     return Promise.resolve(this.ethereumAddress);
   }
 
-  async _signDigest(digestString: string): Promise<string> {
-    const digestBuffer = Buffer.from(ethers.utils.arrayify(digestString));
+  async _signDigest(digestString: string): Promise<Hex> {
+    const digestBuffer = Buffer.from(toBytes(digestString));
     const sig = await requestKmsSignature(digestBuffer, this.kmsCredentials);
     const ethAddr = await this.getAddress();
-    const { v } = determineCorrectV(digestBuffer, sig.r, sig.s, ethAddr);
-    return ethers.utils.joinSignature({
+    const res = await determineCorrectV(digestBuffer, sig.r, sig.s, ethAddr);
+    const v = hexToBigInt(toHex(res.v));
+
+    return joinSignature({
       v,
       r: `0x${sig.r.toString("hex")}`,
       s: `0x${sig.s.toString("hex")}`,
     });
   }
 
-  async signMessage(message: string | ethers.utils.Bytes): Promise<string> {
-    return this._signDigest(ethers.utils.hashMessage(message));
+  async signMessage(message: string | ByteArray): Promise<string> {
+    return this._signDigest(hashMessage({
+      raw: toHex(message),
+    }));
   }
 
   /**
@@ -95,27 +107,26 @@ export class GcpKmsSigner extends ethers.Signer {
       throw new Error("Missing data parameter");
     }
 
-    let messageSignature: Promise<string>;
+    let messageSignature: Hex;
     if (version === SignTypedDataVersion.V1) {
-      messageSignature = this._signDigest(typedSignatureHash(data as TypedDataV1));
+      messageSignature = await this._signDigest(typedSignatureHash(data as TypedDataV1));
     } else {
       const eip712Hash: Buffer = TypedDataUtils.eip712Hash(
         data as TypedMessage<T>,
         version as SignTypedDataVersion.V3 | SignTypedDataVersion.V4
       );
-      messageSignature = this._signDigest(bufferToHex(eip712Hash));
+      messageSignature = await this._signDigest(bufferToHex(eip712Hash));
     }
     return messageSignature;
   }
 
-  async signTransaction(transaction: ethers.utils.Deferrable<ethers.providers.TransactionRequest>): Promise<string> {
-    const unsignedTx = await ethers.utils.resolveProperties(transaction);
-    const serializedTx = ethers.utils.serializeTransaction(<UnsignedTransaction>unsignedTx);
-    const transactionSignature = await this._signDigest(ethers.utils.keccak256(serializedTx));
-    return ethers.utils.serializeTransaction(<UnsignedTransaction>unsignedTx, transactionSignature);
+  async signTransaction(transaction: PrepareTransactionRequestReturnType): Promise<string> {
+    const serializedTx = serializeTransaction(transaction);
+    const transactionSignature = await this._signDigest(keccak256(toBytes(serializedTx)));
+    return serializeTransaction(transaction, splitSignature(transactionSignature));
   }
 
-  connect(provider: ethers.providers.Provider): GcpKmsSigner {
-    return new GcpKmsSigner(this.kmsCredentials, provider);
+  connect(client: WalletClient): GcpKmsSigner {
+    return new GcpKmsSigner(this.kmsCredentials, client);
   }
 }

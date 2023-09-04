@@ -105,3 +105,6 @@ dist
 
 # Jest tests
 __snapshots__
+
+# IDE helpers
+.idea/
