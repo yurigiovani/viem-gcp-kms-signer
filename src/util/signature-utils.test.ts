@@ -1,7 +1,6 @@
-import { SignTypedDataVersion } from "@metamask/eth-sig-util";
-import {joinSignature, splitSignature, validateVersion} from "./signature-utils";
-import {SignableMessage} from "viem";
-import {signMessage} from "viem/accounts";
+import { SignableMessage } from "viem";
+import { signMessage } from "viem/accounts";
+import { joinSignature, SignTypedDataVersion, splitSignature, validateVersion } from "./signature-utils";
 
 describe("Signature Utils", () => {
   test("should validate the v1 correctly", () => {
@@ -36,15 +35,15 @@ describe("Signature Utils", () => {
     // Replace this with your actual private key
     const privateKey = "0x57d42336a4959b7f56cbde74ae2d50003d89e427b184c86ceac7d99a924ef706";
     // Message to be signed
-    const message = 'Hello, Ethereum!' as SignableMessage;
+    const message = "Hello, Ethereum!" as SignableMessage;
     // Sign the message
     const signature = await signMessage({
-      message: message,
-      privateKey: privateKey,
-    })
+      message,
+      privateKey,
+    });
 
     const parsedSignature = splitSignature(signature);
-    const joinedSignature = joinSignature(parsedSignature)
+    const joinedSignature = joinSignature(parsedSignature);
 
     expect(joinedSignature).toBe(signature);
   });

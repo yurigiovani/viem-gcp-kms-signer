@@ -1,7 +1,7 @@
 import configs from "dotenv";
 import { polygonMumbai } from "viem/chains";
-import { createPublicClient, parseEther, webSocket } from "viem";
-import { GcpKmsSigner, TypedDataVersion } from "./signer";
+import { createPublicClient, webSocket } from "viem";
+import { GcpKmsSigner } from "./signer";
 import { recoverTypedSignature } from "./util/signature-utils";
 
 configs.config();
@@ -23,24 +23,25 @@ const kmsCredentials = {
   keyVersion: process.env.KMS_KEY_VERSION,
 };
 
-describe.skip("sign with Google KMS", () => {
-  test("should send a signed transaction using KMS signer", async () => {
-    const websocketURL = `wss://eth-mainnet.g.alchemy.com/v2/${process.env.INFURA_KEY}`
+describe("sign with Google KMS", () => {
+  test.skip("should send a signed transaction using KMS signer", async () => {
+    const websocketURL = `wss://eth-mainnet.g.alchemy.com/v2/${process.env.INFURA_KEY}`;
     const client = createPublicClient({
       chain: polygonMumbai,
       transport: webSocket(websocketURL),
     });
 
-    const signer = new GcpKmsSigner(kmsCredentials).connect(client);
-    const tx = await signer.provider.sendTransaction({
-      to: "0xEd7B3f2902f2E1B17B027bD0c125B674d293bDA0",
-      value: parseEther('0.001'),
-    });
-
-    expect(tx).not.toBeNull();
-
-    /* eslint-disable no-console */
-    console.log(tx);
+    // const signer = new GcpKmsSigner(kmsCredentials).connect(client);
+    // const tx = await signer.provider.sendTransaction({
+    //   account: "0xEd7B3f2902f2E1B17B027bD0c125B674d293bDA0",
+    //   to: "0xEd7B3f2902f2E1B17B027bD0c125B674d293bDA0",
+    //   value: parseEther("0.001"),
+    // });
+    //
+    // expect(tx).not.toBeNull();
+    //
+    // /* eslint-disable no-console */
+    // console.log(tx);
   });
 
   test("should sign a message with typed data v4", async () => {
@@ -60,7 +61,6 @@ describe.skip("sign with Google KMS", () => {
       version: "4",
       chainId: 1,
       verifyingContract: "0x0000000000000000000000000000000000000000",
-      actionId: "0x2",
     };
 
     const types = {
@@ -74,18 +74,15 @@ describe.skip("sign with Google KMS", () => {
         { name: "version", type: "string" },
         { name: "chainId", type: "uint256" },
         { name: "verifyingContract", type: "address" },
-        { name: "actionId", type: "address" },
       ],
     };
 
     const signature = await signer.signTypedData({
-      data: {
-        types,
-        primaryType: "Message",
-        domain,
-        message: couponData,
-      },
-      version: TypedDataVersion.V4,
+      // @ts-ignore
+      types,
+      domain,
+      primaryType: "Message",
+      message: couponData,
     });
 
     /* eslint-disable no-console */
@@ -93,7 +90,7 @@ describe.skip("sign with Google KMS", () => {
 
     expect(signature).not.toBeNull();
 
-    const recoveredAddress = recoverTypedSignature({
+    const recoveredAddress = await recoverTypedSignature({
       data: {
         types,
         primaryType: "Message",
@@ -101,7 +98,6 @@ describe.skip("sign with Google KMS", () => {
         message: couponData,
       },
       signature,
-      version: TypedDataVersion.V4,
     });
 
     /* eslint-disable no-console */

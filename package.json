@@ -5,6 +5,8 @@
   "main": "dist/signer.js",
   "types": "dist/signer.d.ts",
   "scripts": {
+    "start": "node -r ts-node/register src/index.ts",
+    "start-2": "node -r ts-node/register src/index-2.ts",
     "type-check": "tsc --noEmit",
     "test": "jest",
     "coverage": "npm test -- --coverage",
@@ -39,7 +41,6 @@
   "homepage": "https://github.com/openlawteam/ethers-gcp-kms-signer#readme",
   "dependencies": {
     "@google-cloud/kms": "3.0.1",
-    "@metamask/eth-sig-util": "4.0.0",
     "@noble/curves": "^1.2.0",
     "asn1.js": "5.4.1",
     "bn.js": "5.2.0",
@@ -77,6 +78,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "jest": "^27.3.1",
     "lint-staged": "^11.2.4",
+    "node-fetch": "^3.3.2",
     "prettier": "^2.4.1",
     "rimraf": "^3.0.2",
     "semantic-release": "^18.0.0",

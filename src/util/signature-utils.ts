@@ -1,13 +1,15 @@
-import {
-  MessageTypes,
-  SignTypedDataVersion,
-  TypedDataV1,
-  TypedMessage,
-  typedSignatureHash,
-  TypedDataUtils,
-} from "@metamask/eth-sig-util";
 import { bufferToHex, publicToAddress, fromRpcSig, ecrecover } from "ethereumjs-util";
-import { toHex, concat, toBytes, ByteArray, Hex, hexToBigInt, isHex } from "viem";
+import {
+  toHex,
+  concat,
+  toBytes,
+  ByteArray,
+  Hex,
+  hexToBigInt,
+  isHex,
+  hashTypedData,
+  HashTypedDataParameters,
+} from "viem";
 import { Signature } from "viem/src/types/misc";
 
 /**
@@ -20,6 +22,13 @@ import { Signature } from "viem/src/types/misc";
 export function recoverPublicKey(messageHash, signature) {
   const sigParams = fromRpcSig(signature);
   return ecrecover(messageHash, sigParams.v, sigParams.r, sigParams.s);
+}
+
+// eslint-disable-next-line no-shadow
+export enum SignTypedDataVersion {
+  V1 = "V1",
+  V3 = "V3",
+  V4 = "V4",
 }
 
 /**
@@ -50,34 +59,21 @@ export function validateVersion(version: SignTypedDataVersion, allowedVersions?:
  * @param options.version - The signing version to use.
  * @returns The '0x'-prefixed hex address of the signer.
  */
-export function recoverTypedSignature<V extends SignTypedDataVersion, T extends MessageTypes>({
+export async function recoverTypedSignature({
   data,
   signature,
-  version,
 }: {
-  data: V extends "V1" ? TypedDataV1 : TypedMessage<T>;
+  data: HashTypedDataParameters;
   signature: string;
-  version: V;
-}): string {
-  validateVersion(version);
-
+}): Promise<string> {
   if (data === null || data === undefined) {
     throw new Error("Missing data parameter");
   } else if (signature === null || signature === undefined) {
     throw new Error("Missing signature parameter");
   }
 
-  let messageHash: Buffer;
-  if (version === SignTypedDataVersion.V1) {
-    messageHash = Buffer.from(typedSignatureHash(data as TypedDataV1));
-  } else {
-    messageHash = TypedDataUtils.eip712Hash(
-      data as TypedMessage<T>,
-      version as SignTypedDataVersion.V3 | SignTypedDataVersion.V4
-    );
-  }
-
-  const publicKey = recoverPublicKey(messageHash, signature);
+  const hash = hashTypedData(data);
+  const publicKey = recoverPublicKey(toBytes(hash), signature);
   const sender = publicToAddress(publicKey);
   return bufferToHex(sender);
 }
@@ -100,11 +96,7 @@ export function splitSignature(signature: ByteArray | Hex): Signature {
   };
 }
 
-export function joinSignature({r, s, v}: Signature) {
+export function joinSignature({ r, s, v }: Signature) {
   const parsed = splitSignature(toHex(concat([toBytes(r), toBytes(s), toBytes(v)])));
-  return toHex(toBytes(concat([
-    parsed.r,
-    parsed.s,
-    toHex(parsed.v),
-  ])));
+  return toHex(toBytes(concat([parsed.r, parsed.s, toHex(parsed.v)])));
 }

@@ -1,29 +1,16 @@
 import configs from "dotenv";
 import {
-  MessageTypes,
-  SignTypedDataVersion,
-  TypedDataV1,
-  TypedMessage,
-  typedSignatureHash,
-  TypedDataUtils,
-} from "@metamask/eth-sig-util";
-
-import {
   toBytes,
   hashMessage,
   ByteArray,
   toHex,
-  WalletClient,
   serializeTransaction,
-  PrepareTransactionRequestReturnType, keccak256, Hex, hexToBigInt,
-} from "viem"
-import { bufferToHex } from "ethereumjs-util";
+  PrepareTransactionRequestReturnType, keccak256, Hex, hexToBigInt, hashTypedData, TypedData,
+} from "viem";
 import { getPublicKey, getEthereumAddress, requestKmsSignature, determineCorrectV } from "./util/gcp-kms-utils";
-import { joinSignature, splitSignature, validateVersion } from "./util/signature-utils";
+import { joinSignature, splitSignature } from "./util/signature-utils";
 
 configs.config();
-
-export const TypedDataVersion = SignTypedDataVersion;
 
 export interface GcpKmsSignerCredentials {
   projectId: string;
@@ -35,13 +22,11 @@ export interface GcpKmsSignerCredentials {
 
 export class GcpKmsSigner {
   readonly kmsCredentials: GcpKmsSignerCredentials;
-  readonly provider: WalletClient;
 
   ethereumAddress: string;
 
-  constructor(kmsCredentials: GcpKmsSignerCredentials, provider?: WalletClient | null) {
+  constructor(kmsCredentials: GcpKmsSignerCredentials) {
     this.kmsCredentials = kmsCredentials;
-    this.provider = provider;
   }
 
   async getAddress(): Promise<string> {
@@ -67,9 +52,11 @@ export class GcpKmsSigner {
   }
 
   async signMessage(message: string | ByteArray): Promise<string> {
-    return this._signDigest(hashMessage({
-      raw: toHex(message),
-    }));
+    return this._signDigest(
+      hashMessage({
+        raw: toHex(message),
+      })
+    );
   }
 
   /**
@@ -89,44 +76,24 @@ export class GcpKmsSigner {
    * V4 is based on [EIP-712](https://eips.ethereum.org/EIPS/eip-712), and includes full support of
    * arrays and recursive data structures.
    *
-   * @param options - The signing options.
    * @param options.data - The typed data to sign.
    * @param options.version - The signing version to use.
    * @returns The '0x'-prefixed hex encoded signature.
+   * @param data
    */
-  async signTypedData<V extends SignTypedDataVersion, T extends MessageTypes>({
-    data,
-    version,
-  }: {
-    data: V extends "V1" ? TypedDataV1 : TypedMessage<T>;
-    version: V;
-  }): Promise<string> {
-    validateVersion(version);
-
+  async signTypedData(data: TypedData): Promise<string> {
     if (data === null || data === undefined) {
       throw new Error("Missing data parameter");
     }
 
-    let messageSignature: Hex;
-    if (version === SignTypedDataVersion.V1) {
-      messageSignature = await this._signDigest(typedSignatureHash(data as TypedDataV1));
-    } else {
-      const eip712Hash: Buffer = TypedDataUtils.eip712Hash(
-        data as TypedMessage<T>,
-        version as SignTypedDataVersion.V3 | SignTypedDataVersion.V4
-      );
-      messageSignature = await this._signDigest(bufferToHex(eip712Hash));
-    }
-    return messageSignature;
+    // @ts-ignore
+    const typedHash = hashTypedData(data);
+    return this._signDigest(typedHash);
   }
 
   async signTransaction(transaction: PrepareTransactionRequestReturnType): Promise<string> {
     const serializedTx = serializeTransaction(transaction);
     const transactionSignature = await this._signDigest(keccak256(toBytes(serializedTx)));
     return serializeTransaction(transaction, splitSignature(transactionSignature));
-  }
-
-  connect(client: WalletClient): GcpKmsSigner {
-    return new GcpKmsSigner(this.kmsCredentials, client);
   }
 }

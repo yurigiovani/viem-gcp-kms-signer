@@ -24,14 +24,15 @@ const EcdsaPubKey = asn1.define("EcdsaPubKey", function (this: any) {
 /* eslint-enable func-names */
 
 function getClientCredentials() {
-  return process.env.GOOGLE_APPLICATION_CREDENTIAL_EMAIL && process.env.GOOGLE_APPLICATION_CREDENTIAL_PRIVATE_KEY
-    ? {
-        credentials: {
-          client_email: process.env.GOOGLE_APPLICATION_CREDENTIAL_EMAIL,
-          private_key: process.env.GOOGLE_APPLICATION_CREDENTIAL_PRIVATE_KEY.replace(/\\n/gm, "\n"),
-        },
-      }
-    : {};
+  if (process.env.GOOGLE_APPLICATION_CREDENTIAL_EMAIL && process.env.GOOGLE_APPLICATION_CREDENTIAL_PRIVATE_KEY) {
+    return {
+      credentials: {
+        client_email: process.env.GOOGLE_APPLICATION_CREDENTIAL_EMAIL,
+        private_key: process.env.GOOGLE_APPLICATION_CREDENTIAL_PRIVATE_KEY.replace(/\\n/gm, "\n"),
+      },
+    }
+  }
+  return {};
 }
 
 export async function sign(digest: Buffer, kmsCredentials: GcpKmsSignerCredentials) {
